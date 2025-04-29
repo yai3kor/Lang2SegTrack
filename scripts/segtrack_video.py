@@ -57,7 +57,7 @@ def draw_bbox(event, x, y, flags, param):
             drawing = False
             cv2.imshow("Video Tracking", param)
 
-def main(first_list=None):
+def main(args, first_list=None):
     global start, latest, add_new
     if first_list is not None:
         start = first_list
@@ -192,12 +192,12 @@ def main(first_list=None):
                             mask = mask > 0.0
                             non_zero_indices = np.argwhere(mask)
                             if len(non_zero_indices) == 0:
-                                item = [0, 0, 0, 0]
+                                bbox = [0, 0, 0, 0]
                             else:
                                 y_min, x_min = non_zero_indices.min(axis=0).tolist()
                                 y_max, x_max = non_zero_indices.max(axis=0).tolist()
-                                item = [x_min, y_min, x_max - x_min, y_max - y_min]
-                            bbox_to_vis[obj_id] = item
+                                bbox = [x_min, y_min, x_max - x_min, y_max - y_min]
+                            bbox_to_vis[obj_id] = bbox
                             mask_to_vis[obj_id] = mask
 
                         for obj_id, mask in mask_to_vis.items():
@@ -205,23 +205,22 @@ def main(first_list=None):
                             mask_img[mask] = COLOR[obj_id % len(COLOR)]
                             frame = cv2.addWeighted(frame, 1, mask_img, 0.6, 0)
 
-                        for obj_id, item in bbox_to_vis.items():
+                        for obj_id, bbox in bbox_to_vis.items():
                             label = f"obj_{obj_id}"
-                            cv2.rectangle(frame, (item[0], item[1]),
-                                          (item[0] + item[2], item[1] + item[3]),
+                            cv2.rectangle(frame, (bbox[0], bbox[1]),
+                                          (bbox[0] + bbox[2], bbox[1] + bbox[3]),
                                           COLOR[obj_id % len(COLOR)], 2)
-                            cv2.putText(frame, label, (item[0], item[1] - 10),
+                            cv2.putText(frame, label, (bbox[0], bbox[1] - 10),
                                         cv2.FONT_HERSHEY_SIMPLEX, 0.6,
                                         COLOR[obj_id % len(COLOR)], 2)
-                            history.append([item[0], item[1], item[0] + item[2], item[1] + item[3]])
-
-                        if save_output:
-                            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                            writer.append_data(rgb_frame)
+                            history.append([bbox[0], bbox[1], bbox[0] + bbox[2], bbox[1] + bbox[3]])
 
                         cv2.imshow("Video Tracking", frame)
                 else:
                     cv2.imshow("Video Tracking", frame_display)
+                if save_output:
+                    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    writer.append_data(rgb_frame)
 
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     exit_flag = False
@@ -238,12 +237,12 @@ def main(first_list=None):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--video_path", default="/home/jj/JKW/samurai/realsense_output.mp4")
-    parser.add_argument("--model_path", default="/home/jj/JKW/samurai/sam2/checkpoints/sam2.1_hiera_tiny.pt",
+    parser.add_argument("--video_path", default="assets/05_default_juggle.mp4")
+    parser.add_argument("--model_path", default="models/sam2/checkpoints/sam2.1_hiera_tiny.pt",
                         help="Path to the model checkpoint.")
     parser.add_argument("--video_output_path", default="realtime_video.mp4", help="Path to save the output video.")
     parser.add_argument("--save_to_video", default=True, help="Save results to a video.")
     parser.add_argument("--mask_dir", help="If provided, save mask images to the given directory")
     parser.add_argument("--device", default="cuda:0")
     args = parser.parse_args()
-    main()
+    main(args)

@@ -93,12 +93,12 @@ class LangSeg_img:
 
 
 if __name__ == "__main__":
-    model = LangSeg_img(GroundingDINO_16=False)
+    model = LangSeg_img(GroundingDINO_16=True)
     out = model.predict(
-        [Image.open("assets/img_01.jpg")],
-        ["cup.ball"],
+        [Image.open("/home/jj/JKW/Lang2SegTrack/assets/frame_00000.jpg")],
+        ["dog"],
     )
     print(out)
-    img = cv2.imread("assets/img_01.jpg")
+    img = cv2.imread("/home/jj/JKW/Lang2SegTrack/assets/frame_00000.jpg")
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     display_image_with_boxes(img, list(out[0]["boxes"]), list(out[0]["scores"]), list(out[0]["labels"]))

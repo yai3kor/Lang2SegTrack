@@ -39,7 +39,7 @@ class GDINO:
     def predict_dino_1_6_pro(self, img, text, bbox_threshold, iou_threshold):
         headers = {
             "Content-Type": "application/json",
-            "Token": ""
+            "Token": "918e905e4e795d6440c610a4d4923c78"
         }
         if headers["Token"] == "":
             raise ValueError("Please provide your token in the header.")

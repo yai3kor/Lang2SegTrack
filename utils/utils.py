@@ -1,6 +1,9 @@
 import os
+import tempfile
 
 import cv2
+import numpy as np
+from PIL import Image
 
 
 def bbox_process(bbox_list, labels=None):
@@ -43,6 +46,15 @@ def prepare_frames_or_path(video_path):
         raise ValueError("Invalid video_path format. Should be .mp4 or a directory of jpg frames.")
 
 
+def save_frames_to_temp_dir(frames: list[np.ndarray]) -> str:
+    tmp_dir = tempfile.mkdtemp(prefix="chunk_frames_")
+    for i, frame in enumerate(frames):
+        path = os.path.join(tmp_dir, f"{i:04d}.jpg")
+        # OpenCV uses BGR, PIL expects RGB
+        Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)).save(path)
+    return tmp_dir
+
+
 def extract_frames(
         video_path,
         output_dir,
@@ -82,3 +94,7 @@ def extract_frames(
 
     cap.release()
     print("Done.")
+
+# extract_frames('assets/06_demo.mp4',
+#                'assets',
+#                [0])
