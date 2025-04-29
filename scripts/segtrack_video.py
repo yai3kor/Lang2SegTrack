@@ -1,3 +1,4 @@
+import argparse
 import logging
 import queue
 
@@ -11,22 +12,10 @@ from PIL import Image
 
 from models.gdino.models.gdino import GDINO
 from models.sam2.sam2.build_sam import build_sam2_video_predictor
+from utils.color import COLOR
+from utils.utils import determine_model_cfg
 
-color = [
-    (128, 0, 0),
-    (128, 128, 0),
-    (128, 0, 128),
-    (0, 128, 128),
-    (64, 0, 0),
-    (64, 128, 0),
-    (64, 0, 128),
-    (0, 64, 128),
-    (128, 64, 0),
-    (128, 0, 64),
-    (0, 128, 64),
-]
 
-# 用于存储手动绘制的 bbox 和点
 start = []
 latest = None
 drawing = False
@@ -68,33 +57,19 @@ def draw_bbox(event, x, y, flags, param):
             drawing = False
             cv2.imshow("Video Tracking", param)
 
-def determine_model_cfg(model_path):
-    if "large" in model_path:
-        return "configs/samurai/sam2.1_hiera_l.yaml"
-    elif "base_plus" in model_path:
-        return "configs/samurai/sam2.1_hiera_b+.yaml"
-    elif "small" in model_path:
-        return "configs/samurai/sam2.1_hiera_s.yaml"
-    elif "tiny" in model_path:
-        return "configs/samurai/sam2.1_hiera_t.yaml"
-    else:
-        raise ValueError("Unknown model size in path!")
-
 def main(first_list=None):
     global start, latest, add_new
     if first_list is not None:
         start = first_list
 
-    #
-    model_path = "/home/jj/JKW/samurai/sam2/checkpoints/sam2.1_hiera_tiny.pt"
-    save_output = True
-    output_path = "../models/sam2/output.mp4"
+    model_path = args.model_path
+    save_output = args.save_to_video
+    output_path = args.video_output_path
     model_cfg = determine_model_cfg(model_path)
     predictor = build_sam2_video_predictor(model_cfg, model_path, device="cuda:0")
     logging.basicConfig(level=logging.CRITICAL + 1)
 
-    # 加载视频文件
-    video_path = "/home/jj/JKW/samurai/realsense_output.mp4"  # 改成你的 MP4 路径
+    video_path = args.video_path
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         print(f"Failed to open video: {video_path}")
@@ -102,6 +77,7 @@ def main(first_list=None):
 
     # Init gdino
     gdino = GDINO()
+    print('Building gdino model...')
     gdino.build_model()
 
     history = []
@@ -226,17 +202,17 @@ def main(first_list=None):
 
                         for obj_id, mask in mask_to_vis.items():
                             mask_img = np.zeros((height, width, 3), np.uint8)
-                            mask_img[mask] = color[obj_id % len(color)]
+                            mask_img[mask] = COLOR[obj_id % len(COLOR)]
                             frame = cv2.addWeighted(frame, 1, mask_img, 0.6, 0)
 
                         for obj_id, item in bbox_to_vis.items():
                             label = f"obj_{obj_id}"
                             cv2.rectangle(frame, (item[0], item[1]),
                                           (item[0] + item[2], item[1] + item[3]),
-                                          color[obj_id % len(color)], 2)
+                                          COLOR[obj_id % len(COLOR)], 2)
                             cv2.putText(frame, label, (item[0], item[1] - 10),
                                         cv2.FONT_HERSHEY_SIMPLEX, 0.6,
-                                        color[obj_id % len(color)], 2)
+                                        COLOR[obj_id % len(COLOR)], 2)
                             history.append([item[0], item[1], item[0] + item[2], item[1] + item[3]])
 
                         if save_output:
@@ -261,4 +237,13 @@ def main(first_list=None):
         torch.cuda.empty_cache()
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--video_path", default="/home/jj/JKW/samurai/realsense_output.mp4")
+    parser.add_argument("--model_path", default="/home/jj/JKW/samurai/sam2/checkpoints/sam2.1_hiera_tiny.pt",
+                        help="Path to the model checkpoint.")
+    parser.add_argument("--video_output_path", default="realtime_video.mp4", help="Path to save the output video.")
+    parser.add_argument("--save_to_video", default=True, help="Save results to a video.")
+    parser.add_argument("--mask_dir", help="If provided, save mask images to the given directory")
+    parser.add_argument("--device", default="cuda:0")
+    args = parser.parse_args()
     main()

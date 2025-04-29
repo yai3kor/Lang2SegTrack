@@ -12,20 +12,9 @@ from PIL import Image
 
 from models.gdino.models.gdino import GDINO
 from models.sam2.sam2.build_sam import build_sam2_video_predictor
+from utils.color import COLOR
+from utils.utils import determine_model_cfg
 
-color = [
-    (128, 0, 0),
-    (128, 128, 0),
-    (128, 0, 128),
-    (0, 128, 128),
-    (64, 0, 0),
-    (64, 128, 0),
-    (64, 0, 128),
-    (0, 64, 128),
-    (128, 64, 0),
-    (128, 0, 64),
-    (0, 128, 64),
-]
 
 start = []
 latest = None
@@ -70,27 +59,6 @@ def draw_bbox(event, x, y, flags, param):
                 cv2.rectangle(param, (ix, iy), (x, y), (0, 255, 0), 2)
             drawing = False
             cv2.imshow("RealSense Tracking", param)
-
-
-def bbox_process(bbox_list, labels=None):
-    prompts = {}
-    for fid, bbox in enumerate(bbox_list):
-        x1, y1, x2, y2 = bbox
-        label = labels[fid] if labels else f"obj_{fid}"
-        prompts[fid] = ((int(x1), int(y1), int(x2), int(y2)), label)
-    return prompts
-
-def determine_model_cfg(model_path):
-    if "large" in model_path:
-        return "configs/samurai/sam2.1_hiera_l.yaml"
-    elif "base_plus" in model_path:
-        return "configs/samurai/sam2.1_hiera_b+.yaml"
-    elif "small" in model_path:
-        return "configs/samurai/sam2.1_hiera_s.yaml"
-    elif "tiny" in model_path:
-        return "configs/samurai/sam2.1_hiera_t.yaml"
-    else:
-        raise ValueError("Unknown model size in path!")
 
 
 def main(args, first_list=None):
@@ -234,17 +202,17 @@ def main(args, first_list=None):
 
                         for obj_id, mask in mask_to_vis.items():
                             mask_img = np.zeros((height, width, 3), np.uint8)
-                            mask_img[mask] = color[obj_id % len(color)]
+                            mask_img[mask] = COLOR[obj_id % len(COLOR)]
                             frame = cv2.addWeighted(frame, 1, mask_img, 0.6, 0)
 
                         for obj_id, item in bbox_to_vis.items():
                             label = f"obj_{obj_id}"
                             cv2.rectangle(frame, (item[0], item[1]),
                                           (item[0] + item[2], item[1] + item[3]),
-                                          color[obj_id % len(color)], 2)
+                                          COLOR[obj_id % len(COLOR)], 2)
                             cv2.putText(frame, label, (item[0], item[1] - 10),
                                         cv2.FONT_HERSHEY_SIMPLEX, 0.6,
-                                        color[obj_id % len(color)], 2)
+                                        COLOR[obj_id % len(COLOR)], 2)
                             history.append([item[0], item[1], item[0] + item[2], item[1] + item[3]])
 
                         if save_output:
@@ -275,7 +243,7 @@ if __name__ == "__main__":
                         help="Input video path or directory of frames.")
     parser.add_argument("--model_path", default="/home/jj/JKW/Lang2SegTrack/models/sam2/checkpoints/sam2.1_hiera_tiny.pt",
                         help="Path to the model checkpoint.")
-    parser.add_argument("--video_output_path", default="demo.mp4", help="Path to save the output video.")
+    parser.add_argument("--video_output_path", default="realtime.mp4", help="Path to save the output video.")
     parser.add_argument("--save_to_video", default=True, help="Save results to a video.")
     args = parser.parse_args()
     main(args)

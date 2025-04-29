@@ -8,7 +8,7 @@ from PIL import Image
 
 from models.gdino.utils import display_image_with_boxes
 from models.gdino.models.gdino import GDINO
-from utils import DEVICE
+from models.gdino.utils import DEVICE
 from models.sam2.sam import SAM
 
 
@@ -92,59 +92,13 @@ class LangSeg_img:
         return all_results
 
 
-# if __name__ == "__main__":
-#     model = LangSAM(GroundingDINO_16=True)
-#     out = model.predict(
-#         [Image.open("/home/jj/JKW/samurai/first_frame.png")],
-#         ["tennis ball.canned coffee"],
-#     )
-#     print(out)
-#     img = cv2.imread("/home/jj/JKW/samurai/first_frame.png")
-#     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-#     display_image_with_boxes(img, list(out[0]["boxes"]), list(out[0]["scores"]), list(out[0]["labels"]))
-
-
-import pyrealsense2 as rs
-
-# ... existing code ...
-
 if __name__ == "__main__":
-    # 配置 RealSense 管道
-    pipeline = rs.pipeline()
-    config = rs.config()
-    config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
-
-    # 启动管道
-    pipeline.start(config)
-    time.sleep(3)
-
-    try:
-        # 创建 LangSAM 模型实例
-        model = LangSeg_img(GroundingDINO_16=True)
-
-        # 等待获取一帧图像
-        frames = pipeline.wait_for_frames()
-        color_frame = frames.get_color_frame()
-        if not color_frame:
-            print("未获取到颜色帧")
-        else:
-            # 将帧数据转换为 numpy 数组
-            color_image = np.asanyarray(color_frame.get_data())
-            # 将 BGR 转换为 RGB
-            color_image_rgb = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
-            # 将 numpy 数组转换为 PIL 图像
-            image_pil = Image.fromarray(color_image_rgb)
-
-            # 使用 LangSAM 模型进行预测
-            out = model.predict(
-                [image_pil],
-                ["tennis ball"],
-            )
-            print(out)
-
-            # 显示带有边界框的图像
-            display_image_with_boxes(color_image_rgb, list(out[0]["boxes"]), list(out[0]["scores"]), list(out[0]["labels"]))
-
-    finally:
-        # 停止管道
-        pipeline.stop()
+    model = LangSeg_img(GroundingDINO_16=False)
+    out = model.predict(
+        [Image.open("assets/img_01.jpg")],
+        ["cup.ball"],
+    )
+    print(out)
+    img = cv2.imread("assets/img_01.jpg")
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    display_image_with_boxes(img, list(out[0]["boxes"]), list(out[0]["scores"]), list(out[0]["labels"]))

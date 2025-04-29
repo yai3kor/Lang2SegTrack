@@ -4,7 +4,7 @@ from PIL import Image
 from numpy.ma.core import array
 from transformers import AutoModelForZeroShotObjectDetection, AutoProcessor
 
-from utils import DEVICE
+from models.gdino.utils import DEVICE
 
 
 class GDINO:
@@ -41,6 +41,8 @@ class GDINO:
             "Content-Type": "application/json",
             "Token": ""
         }
+        if headers["Token"] == "":
+            raise ValueError("Please provide your token in the header.")
         resp = requests.post(
             url='https://api.deepdataspace.com/v2/task/grounding_dino/detection',
             json={"model": "GroundingDino-1.6-Pro",
