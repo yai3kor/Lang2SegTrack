@@ -41,7 +41,7 @@ https://github.com/user-attachments/assets/40a340c7-d818-493f-b86a-bb8ed5ca517c
 
 ### ❓ Why Use [SAMURAI](https://github.com/yangchris11/samurai)? How is it Different from [SAM2](https://github.com/facebookresearch/sam2)?
 
-- **Samurai** is a zero-shot visual tracking model based on SAM2
+- **SAMURAI** is a zero-shot visual tracking model based on SAM2
 - It outperforms SAM2 in **visual tracking capabilities**
 
 https://github.com/user-attachments/assets/9d368ca7-2e9b-4fed-9da0-d2efbf620d88
