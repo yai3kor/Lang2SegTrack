@@ -33,7 +33,7 @@ Language-driven visual segmentation and object tracking system based on [Groundi
 - Interactive tracking and segmentation with:
   - Mouse click
   - Manual box
-  - Text input
+  - Text prompt
 
 https://github.com/user-attachments/assets/40a340c7-d818-493f-b86a-bb8ed5ca517c
 
