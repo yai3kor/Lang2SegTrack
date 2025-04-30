@@ -205,6 +205,5 @@ if __name__ == "__main__":
     tracker = Lang2SegTrack(model_path="models/sam2/checkpoints/sam2.1_hiera_tiny.pt",
                             video_path="assets/05_default_juggle.mp4",
                             output_path="processed_video.mp4",
-                            first_boxes=[[27,64,59,225]],
                             mode="realtime")
     tracker.run()
