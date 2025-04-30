@@ -44,7 +44,9 @@ https://github.com/user-attachments/assets/40a340c7-d818-493f-b86a-bb8ed5ca517c
 - **Samurai** is a zero-shot visual tracking model based on SAM2
 - It outperforms SAM2 in **visual tracking capabilities**
 
-📊 *Insert comparison video here*
+https://github.com/user-attachments/assets/9d368ca7-2e9b-4fed-9da0-d2efbf620d88
+
+All rights are reserved to the copyright owners (TM & © Universal (2019)). This clip is not intended for commercial use and is solely for academic demonstration in a research paper. Original source can be found [here](https://www.youtube.com/watch?v=cwUzUzpG8aM&t=4s).)
 
 ---
 
