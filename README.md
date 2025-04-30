@@ -3,7 +3,7 @@
 
 # Language-to-Segment&Track
 
-Language-driven visual segmentation and object tracking system based on [Grounding-DINO](https://github.com/IDEA-Research/GroundingDINO) and [Samurai](https://github.com/yangchris11/samurai).
+Language-driven visual segmentation and object tracking system based on [Grounding-DINO](https://github.com/IDEA-Research/GroundingDINO) and [SAMURAI](https://github.com/yangchris11/samurai).
 
 ---
 
@@ -39,14 +39,14 @@ https://github.com/user-attachments/assets/40a340c7-d818-493f-b86a-bb8ed5ca517c
 
 ---
 
-### ❓ Why Use [Samurai](https://github.com/yangchris11/samurai)? How is it Different from [SAM2](https://github.com/facebookresearch/sam2)?
+### ❓ Why Use [SAMURAI](https://github.com/yangchris11/samurai)? How is it Different from [SAM2](https://github.com/facebookresearch/sam2)?
 
 - **Samurai** is a zero-shot visual tracking model based on SAM2
 - It outperforms SAM2 in **visual tracking capabilities**
 
 https://github.com/user-attachments/assets/9d368ca7-2e9b-4fed-9da0-d2efbf620d88
 
-All rights are reserved to the copyright owners (TM & © Universal (2019)). This clip is not intended for commercial use and is solely for academic demonstration in a research paper. Original source can be found [here](https://www.youtube.com/watch?v=cwUzUzpG8aM&t=4s).)
+This demo comes from [SAMURAI](https://github.com/yangchris11/samurai) and shows the comparison of video tracking performance between [SAM2](https://github.com/facebookresearch/sam2) and [SAMURAI](https://github.com/yangchris11/samurai). All rights are reserved to the copyright owners (TM & © Universal (2019)). This clip is not intended for commercial use and is solely for academic demonstration in a research paper. Original source can be found [here](https://www.youtube.com/watch?v=cwUzUzpG8aM&t=4s).)
 
 ---
 
