@@ -35,7 +35,7 @@ Language-driven visual segmentation and object tracking system based on [Groundi
   - Manual box
   - Text input
 
-[assets/demo.mp4](https://github.com/wngkj/Lang2SegTrack/assets/demo.mp4))
+https://github.com/user-attachments/assets/40a340c7-d818-493f-b86a-bb8ed5ca517c
 
 ---
 
