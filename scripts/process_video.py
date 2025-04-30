@@ -15,7 +15,7 @@ from models.sam2.sam2.build_sam import build_sam2_video_predictor
 from pathlib import Path
 import imageio.v3 as iio
 
-def process_video_in_chunks(args, initial_bbox_list: list[list[float]], chunk_seconds: int = 10):
+def process_video_in_chunks(args, initial_bbox_list: list[list[float]], chunk_seconds: int = 2):
     cap = cv2.VideoCapture(args.video_path)
     fps = int(cap.get(cv2.CAP_PROP_FPS))
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -142,7 +142,7 @@ def main(args, bbox_list:list[list[float]]):
         mask_dir = Path(mask_dir)
         mask_dir.mkdir(exist_ok=True, parents=True)
     with torch.inference_mode(), torch.autocast('cuda', dtype=torch.float16):
-        state = predictor.init_state(frames_or_path, offload_video_to_cpu=True, offload_state_to_cpu=True)
+        state = predictor.init_state(frames_or_path, offload_video_to_cpu=True, offload_state_to_cpu=True, async_loading_frames=True)
         all_masks = []
         for idx, (bbox, track_label) in enumerate(prompts.values()):
             _, _, masks = predictor.add_new_points_or_box(state, box=bbox, frame_idx=0, obj_id=idx)
@@ -204,4 +204,7 @@ if __name__ == "__main__":
     parser.add_argument("--device", default="cuda:0")
     args = parser.parse_args()
     main(args, bbox_list=[[600.8110961914062, 367.03106689453125, 801.8921508789062, 593.2459106445312]])
-    # process_video_in_chunks(args, initial_bbox_list=[[600.8110961914062, 367.03106689453125, 801.8921508789062, 593.2459106445312]])
+    # process_video_in_chunks(args, initial_bbox_list=[[364.53216552734375, 426.52178955078125, 437.9630126953125, 500.3838195800781],
+    #                                                  [260.3464050292969, 0.1987624168395996, 445.94500732421875, 198.92283630371094],
+    #                                                  [829.1287841796875, 292.64874267578125, 999.095703125, 544.427978515625],
+    #                                                  [568.9965209960938, 291.2940673828125, 738.1513671875, 544.0554809570312]])

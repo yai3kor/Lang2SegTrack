@@ -4,6 +4,8 @@ import torch
 from hydra import compose
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
+
+from models.sam2.sam2.sam2_video_predictor import SAM2VideoPredictor
 from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
 from sam2.build_sam import build_sam2
 from sam2.sam2_image_predictor import SAM2ImagePredictor
@@ -31,17 +33,11 @@ class SAM:
     def build_model(self, sam_type: str, ckpt_path: str | None = None, device=torch.device('cuda:0')):
         self.sam_type = sam_type
         self.ckpt_path = ckpt_path
-        # cfg = compose(config_name=SAM_MODELS[self.sam_type]["config"], overrides=[])
-        # OmegaConf.resolve(cfg)
-        # self.model = instantiate(cfg.model, _recursive_=True)
-        # self._load_checkpoint(self.model)
-        # self.model = self.model.to(device)
-        # self.model.eval()
-        # self.mask_generator = SAM2AutomaticMaskGenerator(self.model)
-        # self.predictor = SAM2ImagePredictor(self.model)
         self.model = build_sam2(config_file=SAM_MODELS[self.sam_type]["config"], ckpt_path=self.ckpt_path)
+        self.model.to(device=device)
         self.mask_generator = SAM2AutomaticMaskGenerator(self.model)
-        self.predictor = SAM2ImagePredictor(self.model)
+        self.img_predictor = SAM2ImagePredictor(self.model)
+
 
     def _load_checkpoint(self, model: torch.nn.Module):
         if self.ckpt_path is None:
@@ -78,8 +74,8 @@ class SAM:
         return sam2_result
 
     def predict(self, image_rgb: np.ndarray, xyxy: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        self.predictor.set_image(image_rgb)
-        masks, scores, logits = self.predictor.predict(box=xyxy, multimask_output=False)
+        self.img_predictor.set_image(image_rgb)
+        masks, scores, logits = self.img_predictor.predict(box=xyxy, multimask_output=False)
         if len(masks.shape) > 3:
             masks = np.squeeze(masks, axis=1)
         return masks, scores, logits
@@ -89,9 +85,9 @@ class SAM:
         images_rgb: list[np.ndarray],
         xyxy: list[np.ndarray],
     ) -> tuple[list[np.ndarray], list[np.ndarray], list[np.ndarray]]:
-        self.predictor.set_image_batch(images_rgb)
+        self.img_predictor.set_image_batch(images_rgb)
 
-        masks, scores, logits = self.predictor.predict_batch(box_batch=xyxy, multimask_output=False)
+        masks, scores, logits = self.img_predictor.predict_batch(box_batch=xyxy, multimask_output=False)
 
         masks = [np.squeeze(mask, axis=1) if len(mask.shape) > 3 else mask for mask in masks]
         scores = [np.squeeze(score) for score in scores]

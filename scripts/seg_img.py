@@ -12,7 +12,7 @@ from models.gdino.utils import DEVICE
 from models.sam2.sam import SAM
 
 
-class LangSeg_img:
+class Lang2Seg_img:
     def __init__(self, sam_type="sam2.1_hiera_tiny", ckpt_path: str | None = None, device=DEVICE, GroundingDINO_16=False):
         self.sam_type = sam_type
 
@@ -21,6 +21,7 @@ class LangSeg_img:
         self.gdino = GDINO()
         self.GroundingDINO_16 = GroundingDINO_16
         if not self.GroundingDINO_16:
+            print("Building GroundingDINO model...")
             self.gdino.build_model(device=device)
 
     def predict(
@@ -93,12 +94,12 @@ class LangSeg_img:
 
 
 if __name__ == "__main__":
-    model = LangSeg_img(GroundingDINO_16=True)
+    model = Lang2Seg_img(GroundingDINO_16=False)
     out = model.predict(
-        [Image.open("/home/jj/JKW/Lang2SegTrack/assets/frame_00000.jpg")],
-        ["dog"],
+        [Image.open("assets/img_01.jpg")],
+        ["cup.ball"],
     )
     print(out)
-    img = cv2.imread("/home/jj/JKW/Lang2SegTrack/assets/frame_00000.jpg")
+    img = cv2.imread("assets/img_01.jpg")
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     display_image_with_boxes(img, list(out[0]["boxes"]), list(out[0]["scores"]), list(out[0]["labels"]))
