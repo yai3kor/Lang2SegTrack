@@ -111,7 +111,7 @@ Place them into `sam2/checkpoints/`:
 
 This project builds upon outstanding prior work:
 
-- [GroundingDINO](https://github.com/IDEA-Research/GroundingDINO)
-- [Samurai](https://github.com/yangchris11/samurai)
+- [Grounding-DINO](https://github.com/IDEA-Research/GroundingDINO)
+- [SAMURAI](https://github.com/yangchris11/samurai)
 - [SAM2](https://github.com/facebookresearch/sam2)
-- [Lang-Segment-Anything](https://github.com/luca-medeiros/lang-segment-anything)
+- [Language-Segment-Anything](https://github.com/luca-medeiros/lang-segment-anything)
