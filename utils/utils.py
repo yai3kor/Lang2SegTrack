@@ -95,6 +95,6 @@ def extract_frames(
     cap.release()
     print("Done.")
 
-# extract_frames('assets/06_demo.mp4',
+# extract_frames('assets/05_default_juggle.mp4',
 #                'assets',
 #                [0])

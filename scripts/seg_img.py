@@ -102,4 +102,5 @@ if __name__ == "__main__":
     print(out)
     img = cv2.imread("assets/img_01.jpg")
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    display_image_with_boxes(img, list(out[0]["boxes"]), list(out[0]["scores"]), list(out[0]["labels"]))
+    display_image_with_boxes(img, list(out[0]["boxes"]), out[0]["scores"], list(out[0]["labels"]))
+

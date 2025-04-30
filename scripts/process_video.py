@@ -173,7 +173,7 @@ def main(args, bbox_list:list[list[float]]):
                 for obj_id, mask in mask_to_vis.items():
                     mask_img = np.zeros((height, width, 3), np.uint8)
                     mask_img[mask] = COLOR[obj_id % len(COLOR)]
-                    img = cv2.addWeighted(img, 1, mask_img, 0.5, 0)
+                    img = cv2.addWeighted(img, 1, mask_img, 0.4, 0)
 
                 for obj_id, bbox in bbox_to_vis.items():
                     label = f"obj_{obj_id}"
@@ -196,14 +196,19 @@ def main(args, bbox_list:list[list[float]]):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--video_path", default="assets/06_demo.mp4")
+    parser.add_argument("--video_path", default="assets/05_default_juggle.mp4")
     parser.add_argument("--model_path", default="models/sam2/checkpoints/sam2.1_hiera_tiny.pt", help="Path to the model checkpoint.")
     parser.add_argument("--video_output_path", default="processed_video.mp4", help="Path to save the output video.")
     parser.add_argument("--save_to_video", default=True, help="Save results to a video.")
     parser.add_argument("--mask_dir", help="If provided, save mask images to the given directory")
     parser.add_argument("--device", default="cuda:0")
     args = parser.parse_args()
-    main(args, bbox_list=[[600.8110961914062, 367.03106689453125, 801.8921508789062, 593.2459106445312]])
+    main(args, bbox_list=[[607.75244140625, 126.3901596069336, 791.4397583007812, 356.09332275390625],
+                          [612.8888549804688, 284.82171630859375, 692.8299560546875, 362.6283874511719],
+                          [638.74560546875, 598.923095703125, 687.992431640625, 663.7514038085938],
+                          [733.8016357421875, 612.997314453125, 782.0617065429688, 671.3180541992188],
+                          [639.07861328125, 345.004638671875, 775.4666748046875, 615.2918701171875],
+                          [797.278564453125, 261.87451171875, 818.1863403320312, 283.78070068359375]])
     # process_video_in_chunks(args, initial_bbox_list=[[364.53216552734375, 426.52178955078125, 437.9630126953125, 500.3838195800781],
     #                                                  [260.3464050292969, 0.1987624168395996, 445.94500732421875, 198.92283630371094],
     #                                                  [829.1287841796875, 292.64874267578125, 999.095703125, 544.427978515625],

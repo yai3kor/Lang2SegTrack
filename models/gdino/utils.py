@@ -61,7 +61,6 @@ def display_image_with_boxes(image, boxes, logits, phrases):
 
     fig, ax = plt.subplots()
     ax.imshow(image)
-    ax.set_title("Image with Bounding Boxes")
     ax.axis('off')
 
     hex_colors = ['#209ce3', '#fecce6', '#ffe9a5', '#3dbc75']
