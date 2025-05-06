@@ -7,7 +7,7 @@ from omegaconf import OmegaConf
 
 from models.sam2.sam2.sam2_video_predictor import SAM2VideoPredictor
 from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
-from sam2.build_sam import build_sam2
+from sam2.build_sam import build_sam2, build_sam2_video_predictor
 from sam2.sam2_image_predictor import SAM2ImagePredictor
 
 SAM_MODELS = {
@@ -37,7 +37,8 @@ class SAM:
         self.model.to(device=device)
         self.mask_generator = SAM2AutomaticMaskGenerator(self.model)
         self.img_predictor = SAM2ImagePredictor(self.model)
-
+        self.video_predictor = build_sam2_video_predictor(SAM_MODELS[self.sam_type]["config"], self.ckpt_path,
+                                                          device=device)
 
     def _load_checkpoint(self, model: torch.nn.Module):
         if self.ckpt_path is None:

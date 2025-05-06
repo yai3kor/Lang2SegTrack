@@ -95,14 +95,9 @@ Place them into `sam2/checkpoints/`:
 
 ## Usage
 
-- **For Image Processing:**
-  ```bash
-  python scripts/seg_img.py
-  ```
 
-- **For Video or Camera Stream:**
   ```bash
-  python scripts/segtrack_realtime.py
+  python scripts/lang2segtrack.py
   ```
 
 ---
