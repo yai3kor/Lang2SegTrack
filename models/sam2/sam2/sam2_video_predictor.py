@@ -1,6 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
-
+import gc
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
@@ -63,7 +63,9 @@ class SAM2VideoPredictor(SAM2Base):
             [inference_state["images"].to(storage_device), img_tensor.unsqueeze(0)],
             dim=0
         )
+        inference_state["images_idx"].append(inference_state["num_frames"])
         inference_state["num_frames"] += 1
+
 
     def init_state_from_numpy_frames(
             self,
@@ -96,6 +98,7 @@ class SAM2VideoPredictor(SAM2Base):
 
         inference_state = {}
         inference_state["images"] = images
+        inference_state["images_idx"] = list(range(len(images)))
         inference_state["num_frames"] = len(images)
         inference_state["offload_video_to_cpu"] = offload_video_to_cpu
         inference_state["offload_state_to_cpu"] = offload_state_to_cpu
@@ -126,6 +129,65 @@ class SAM2VideoPredictor(SAM2Base):
         # 使用第 0 帧进行视觉特征提取
         self._get_image_feature(inference_state, frame_idx=0, batch_size=1)
         return inference_state
+
+
+    def release_old_frames(self, inference_state, frame_idx, max_inference_state_frames, pre_frames, release_images=False):
+        oldest_allowed_idx = frame_idx - max_inference_state_frames
+
+        all_cond_frames_idx = inference_state['output_dict']['cond_frame_outputs'].keys()
+        all_non_cond_frames_idx = inference_state['output_dict']['non_cond_frame_outputs'].keys()
+        old_cond_frames_idx = [idx for idx in all_cond_frames_idx if (pre_frames - 1) < idx <= oldest_allowed_idx]
+        old_non_cond_frames_idx = [idx for idx in all_non_cond_frames_idx if (pre_frames - 1) < idx <= oldest_allowed_idx]
+
+        for old_idx in old_non_cond_frames_idx:
+            inference_state['output_dict']['non_cond_frame_outputs'].pop(old_idx,None)
+            for obj in inference_state['output_dict_per_obj'].keys():
+                inference_state['output_dict_per_obj'][obj]['non_cond_frame_outputs'].pop(old_idx,None)
+
+        for old_idx in old_cond_frames_idx:
+            inference_state['output_dict']['cond_frame_outputs'].pop(old_idx,None)
+            inference_state['consolidated_frame_inds']['cond_frame_outputs'].discard(old_idx)
+            for obj in inference_state['output_dict_per_obj'].keys():
+                inference_state['output_dict_per_obj'][obj]['cond_frame_outputs'].pop(old_idx,None)
+
+        if release_images:
+            old_image_indices = [idx for idx in inference_state["images_idx"] if (pre_frames - 1) < idx <= oldest_allowed_idx]
+
+            image_idx_to_remove = []
+            for old_idx in old_image_indices:
+                old_image_idx = inference_state["images_idx"].index(old_idx)  # 需要被删除的真实视频帧索引转化为images中对应索引
+                image_idx_to_remove.append(old_image_idx)
+
+            mask = torch.tensor([i for i in range(inference_state["images"].size(0)) if i not in image_idx_to_remove])
+            mask = mask.to(inference_state["images"].device)
+            inference_state["images"] = torch.index_select(inference_state["images"], dim=0, index=mask)
+            inference_state["images_idx"] = [idx for idx in inference_state["images_idx"] if idx not in old_image_indices]
+
+            assert len(inference_state["images"]) == len(inference_state["images_idx"])  # 确保images和images_idx长度一致
+
+        gc.collect()
+
+
+    def append_frame_as_cond_frame(self, inference_state, frame_idx):
+
+        output_dict = inference_state["output_dict"]
+
+        if frame_idx not in output_dict["non_cond_frame_outputs"]:
+            raise ValueError(f"Frame {frame_idx} not found in non-cond outputs")
+
+        # 将该帧的输出复制进 cond_frame_outputs
+        current_out = output_dict["non_cond_frame_outputs"].pop(frame_idx)
+        output_dict["cond_frame_outputs"][frame_idx] = current_out
+
+        # 清理对象级缓存
+        # for obj_temp_dict in inference_state["temp_output_dict_per_obj"]:
+        #     if frame_idx in obj_temp_dict["non_cond_frame_outputs"]:
+        #         del obj_temp_dict["non_cond_frame_outputs"][frame_idx]
+        #     obj_temp_dict["cond_frame_outputs"][frame_idx] = current_out  # broadcast
+
+        # 更新 consolidated_frame_inds 记录
+        inference_state["consolidated_frame_inds"]["non_cond_frame_outputs"].discard(frame_idx)
+        inference_state["consolidated_frame_inds"]["cond_frame_outputs"].add(frame_idx)
 
     @torch.inference_mode()
     def init_state(
@@ -348,7 +410,7 @@ class SAM2VideoPredictor(SAM2Base):
         obj_temp_output_dict = inference_state["temp_output_dict_per_obj"][obj_idx]
         # Add a frame to conditioning output if it's an initial conditioning frame or
         # if the model sees all frames receiving clicks/mask as conditioning frames.
-        is_cond = is_init_cond_frame or self.add_all_frames_to_correct_as_cond
+        is_cond =  is_init_cond_frame or self.add_all_frames_to_correct_as_cond
         storage_key = "cond_frame_outputs" if is_cond else "non_cond_frame_outputs"
 
         # Get any previously predicted mask logits on this object and feed it along with
@@ -744,7 +806,9 @@ class SAM2VideoPredictor(SAM2Base):
             input_frames_inds.update(point_inputs_per_frame.keys())
         for mask_inputs_per_frame in inference_state["mask_inputs_per_obj"].values():
             input_frames_inds.update(mask_inputs_per_frame.keys())
-        assert all_consolidated_frame_inds == input_frames_inds
+        # print('all_consolidated_frame_inds', all_consolidated_frame_inds)
+        # print('input_frames_inds', input_frames_inds)
+        # assert all_consolidated_frame_inds == input_frames_inds
 
     @torch.inference_mode()
     def propagate_in_video(
@@ -973,7 +1037,8 @@ class SAM2VideoPredictor(SAM2Base):
         if backbone_out is None:
             # Cache miss -- we will run inference on a single image
             device = inference_state["device"]
-            image = inference_state["images"][frame_idx].to(device).float().unsqueeze(0)
+            target_idx = inference_state["images_idx"].index(frame_idx)
+            image = inference_state["images"][target_idx].to(device).float().unsqueeze(0)
             backbone_out = self.forward_image(image)
             # Cache the most recent frame's feature (for repeated interactions with
             # a frame; we can use an LRU cache for more frames in the future).

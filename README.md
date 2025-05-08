@@ -6,7 +6,12 @@
 Language-driven visual segmentation and object tracking system based on [Grounding-DINO](https://github.com/IDEA-Research/GroundingDINO) and [SAMURAI](https://github.com/yangchris11/samurai).
 
 ---
+### 🔥 News
 
+- **`2025/05/08`**: Optimize memory usage and code logic.
+- **`2025/04/29`**: Initial version submission.
+
+---
 
 ### 🔍 What Can It Do?
 
@@ -99,7 +104,13 @@ Place them into `sam2/checkpoints/`:
   ```bash
   python scripts/lang2segtrack.py
   ```
+- **`track`**: Track objects in video files or real-time video streams by using first-frame prompts, text-prompts, mouse click or manual boxes drawing.
 
+
+- **`predict_img`**: Predict objects in images by using text-prompts.
+
+
+- **`track_realtime_fast`**: Track objects in real-time video streams faster. Only supports first-frame prompts.
 ---
 
 ## 🙏 Acknowledgments
