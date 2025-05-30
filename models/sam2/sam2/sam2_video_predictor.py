@@ -131,7 +131,7 @@ class SAM2VideoPredictor(SAM2Base):
         return inference_state
 
 
-    def release_old_frames(self, inference_state, frame_idx, max_inference_state_frames, pre_frames, release_images=False):
+    def release_old_frames(self, inference_state, frame_idx, max_inference_state_frames, pre_frames, release_images=True):
         oldest_allowed_idx = frame_idx - max_inference_state_frames
 
         all_cond_frames_idx = inference_state['output_dict']['cond_frame_outputs'].keys()
@@ -155,6 +155,7 @@ class SAM2VideoPredictor(SAM2Base):
 
             image_idx_to_remove = []
             for old_idx in old_image_indices:
+                inference_state["cached_features"].pop(old_idx, None)
                 old_image_idx = inference_state["images_idx"].index(old_idx)  # 需要被删除的真实视频帧索引转化为images中对应索引
                 image_idx_to_remove.append(old_image_idx)
 
@@ -208,6 +209,7 @@ class SAM2VideoPredictor(SAM2Base):
         )
         inference_state = {}
         inference_state["images"] = images
+        inference_state["images_idx"] = list(range(len(images)))
         inference_state["num_frames"] = len(images)
         # whether to offload the video frames to CPU memory
         # turning on this option saves the GPU memory with only a very small overhead
@@ -895,6 +897,64 @@ class SAM2VideoPredictor(SAM2Base):
                 inference_state, pred_masks
             )
             yield frame_idx, obj_ids, video_res_masks
+
+    def propagate_in_frame(
+            self,
+            inference_state,
+            start_frame_idx=None,
+            reverse=False,
+    ):
+        """Propagate the input points across frames to track in the entire video."""
+        self.propagate_in_video_preflight(inference_state)
+
+        output_dict = inference_state["output_dict"]
+        consolidated_frame_inds = inference_state["consolidated_frame_inds"]
+        obj_ids = inference_state["obj_ids"]
+        batch_size = self._get_obj_num(inference_state)
+        if len(output_dict["cond_frame_outputs"]) == 0:
+            raise RuntimeError("No points are provided; please add points first")
+        clear_non_cond_mem = self.clear_non_cond_mem_around_input and (
+                self.clear_non_cond_mem_for_multi_obj or batch_size <= 1
+        )
+
+        if start_frame_idx in consolidated_frame_inds["cond_frame_outputs"]:
+            storage_key = "cond_frame_outputs"
+            current_out = output_dict[storage_key][start_frame_idx]
+            pred_masks = current_out["pred_masks"]
+            if clear_non_cond_mem:
+                # clear non-conditioning memory of the surrounding frames
+                self._clear_non_cond_mem_around_input(inference_state, start_frame_idx)
+        elif start_frame_idx in consolidated_frame_inds["non_cond_frame_outputs"]:
+            storage_key = "non_cond_frame_outputs"
+            current_out = output_dict[storage_key][start_frame_idx]
+            pred_masks = current_out["pred_masks"]
+        else:
+            storage_key = "non_cond_frame_outputs"
+            current_out, pred_masks = self._run_single_frame_inference(
+                inference_state=inference_state,
+                output_dict=output_dict,
+                frame_idx=start_frame_idx,
+                batch_size=batch_size,
+                is_init_cond_frame=False,
+                point_inputs=None,
+                mask_inputs=None,
+                reverse=reverse,
+                run_mem_encoder=True,
+            )
+            output_dict[storage_key][start_frame_idx] = current_out
+        # Create slices of per-object outputs for subsequent interaction with each
+        # individual object after tracking.
+        self._add_output_per_object(
+            inference_state, start_frame_idx, current_out, storage_key
+        )
+        inference_state["frames_already_tracked"][start_frame_idx] = {"reverse": reverse}
+
+        # Resize the output mask to the original video resolution (we directly use
+        # the mask scores on GPU for output to avoid any CPU conversion in between)
+        _, video_res_masks = self._get_orig_video_res_output(
+            inference_state, pred_masks
+        )
+        yield start_frame_idx, obj_ids, video_res_masks
 
     def _add_output_per_object(
         self, inference_state, frame_idx, current_out, storage_key

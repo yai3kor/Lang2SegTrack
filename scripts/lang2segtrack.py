@@ -2,6 +2,7 @@ import base64
 import os
 import threading
 import queue
+import time
 from io import BytesIO
 
 import cv2
@@ -22,7 +23,7 @@ from utils.utils import prepare_frames_or_path, bbox_process
 
 class Lang2SegTrack:
     def __init__(self, sam_type:str="sam2.1_hiera_tiny", model_path:str="models/sam2/checkpoints/sam2.1_hiera_tiny.pt",
-                 video_path:str="", output_path:str="", max_frames:int=90,
+                 video_path:str="", output_path:str="", max_frames:int=20,
                  first_prompts: list[list] | None = None, save_video=True,
                  gdino_16=False, device="cuda:0", mode="realtime"):
         self.sam_type = sam_type # the type of SAM model to use
@@ -31,6 +32,8 @@ class Lang2SegTrack:
         self.output_path = output_path # the path to save the output video. If save_video=False, this param is ignored.
         self.max_frames = max_frames # The maximum number of frames to be retained, beyond which the oldest frames are deleted,
         # so that the memory footprint does not grow indefinitely
+        # If the number of tracked objects is small and won't be occluded, you can set it to a small value(such as 10) to increase the FPS,
+        # and if the number of tracked objects is large and likely to be occluded, set it to a larger value(such as 60) to enhance tracking
         self.save_video = save_video # whether to save the output video
         self.device = device
         self.mode = mode # the mode to run the tracker. "img", "video" or "realtime"
@@ -55,6 +58,7 @@ class Lang2SegTrack:
             self.add_new = True
         else:
             self.prompts_list = []
+        self.prev_time = 0
 
     def input_thread(self):
         while True:
@@ -97,8 +101,8 @@ class Lang2SegTrack:
 
     def track_and_visualize(self, predictor, state, frame, writer):
         if any(len(state["point_inputs_per_obj"][i]) > 0 for i in range(len(state["point_inputs_per_obj"]))):
-            for frame_idx, obj_ids, masks in predictor.propagate_in_video(state, state["num_frames"] - 1, 1):
-                self.prompts_list.clear()
+            for frame_idx, obj_ids, masks in predictor.propagate_in_frame(state, state["num_frames"] - 1):
+                self.prompts_list=[]
                 for obj_id, mask in zip(obj_ids, masks):
                     mask = mask[0].cpu().numpy() > 0.0
                     nonzero = np.argwhere(mask)
@@ -110,7 +114,7 @@ class Lang2SegTrack:
                         bbox = [x_min, y_min, x_max - x_min, y_max - y_min]
                     self.draw_mask_and_bbox(frame, mask, bbox, obj_id)
                     self.prompts_list.append([bbox[0], bbox[1], bbox[0] + bbox[2], bbox[1] + bbox[3]])
-
+        self.show_fps(frame)
         cv2.imshow("Video Tracking", frame)
 
         if writer:
@@ -126,83 +130,14 @@ class Lang2SegTrack:
         cv2.rectangle(frame, (x, y), (x + w, y + h), COLOR[obj_id % len(COLOR)], 2)
         cv2.putText(frame, f"obj_{obj_id}", (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, COLOR[obj_id % len(COLOR)], 2)
 
-    def track(self):
 
-        predictor = self.sam.video_predictor
+    def show_fps(self, frame):
+        curr_time = time.time()
+        fps = 1 / (curr_time - self.prev_time)
+        self.prev_time = curr_time
+        fps_str = f"FPS: {fps:.2f}"
+        cv2.putText(frame, fps_str, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
 
-        if self.mode == "realtime":
-            print("Start with realtime mode.")
-            pipeline = rs.pipeline()
-            config = rs.config()
-            config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
-            pipeline.start(config)
-            frames = pipeline.wait_for_frames()
-            color_frame = frames.get_color_frame()
-            color_image = np.asanyarray(color_frame.get_data())
-            get_frame = lambda: np.asanyarray(pipeline.wait_for_frames().get_color_frame().get_data())
-        elif self.mode == "video":
-            print("Start with video mode.")
-            cap = cv2.VideoCapture(self.video_path)
-            ret, color_image = cap.read()
-            get_frame = lambda: cap.read()
-        else:
-            raise ValueError("The mode is not supported in this method.")
-
-        self.height, self.width = color_image.shape[:2]
-
-        if self.save_video:
-            writer = imageio.get_writer(self.output_path, fps=30)
-        else:
-            writer = None
-
-        cv2.namedWindow("Video Tracking")
-
-        threading.Thread(target=self.input_thread, daemon=True).start()
-
-        with torch.inference_mode(), torch.autocast("cuda", dtype=torch.float16):
-            state = predictor.init_state_from_numpy_frames([color_image], offload_state_to_cpu=False, offload_video_to_cpu=False)
-            while True:
-                if self.mode == "realtime":
-                    frame = get_frame()
-                else:
-                    ret, frame = get_frame()
-                    if not ret:
-                        continue
-                self.frame_display = frame.copy()
-                cv2.setMouseCallback("Video Tracking", self.draw_bbox, param=self.frame_display)
-
-                if not self.input_queue.empty():
-                    text = self.input_queue.get()
-                    out = self.gdino.predict([Image.fromarray(frame)], [text], 0.3, 0.25)
-                    boxes = [[int(v) for v in box] for box in out[0]["boxes"].cpu().numpy().tolist()]
-                    self.prompts_list.extend(boxes)
-                    self.add_new = True
-
-                if self.add_new:
-                    predictor.reset_state(state)
-                    self.add_to_state(predictor, state, self.prompts_list)
-                    self.add_new = False
-
-                predictor.append_frame_to_inference_state(state, frame)
-                self.track_and_visualize(predictor, state, frame, writer)
-                if (state["num_frames"] - 1) % self.max_frames and len(state["output_dict"]["non_cond_frame_outputs"]) != 0:
-                    predictor.append_frame_as_cond_frame(state, state["num_frames"] - 1)
-                predictor.release_old_frames(state, state["num_frames"]-1, self.max_frames, 0, release_images=True)
-
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    break
-
-        if self.mode == "realtime":
-            pipeline.stop()
-        else:
-            cap.release()
-        if writer:
-            writer.close()
-        cv2.destroyAllWindows()
-        del predictor, state
-        gc.collect()
-        torch.clear_autocast_cache()
-        torch.cuda.empty_cache()
 
     def predict_img(
         self,
@@ -273,18 +208,28 @@ class Lang2SegTrack:
             # print(f"Predicted {len(all_results)} masks")
         return all_results
 
-    def track_realtime_fast(self):
-        # this method only support use "first_prompts"
-        if self.mode != "realtime":
-            raise ValueError("This method only support use 'realtime' mode")
-        if self.first_prompts is None:
-            raise ValueError("Please provide 'first_prompts' param")
+    def track(self):
+
         predictor = self.sam.video_predictor
-        pipeline = rs.pipeline()
-        config = rs.config()
-        config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
-        pipeline.start(config)
-        color_image = np.asanyarray(pipeline.wait_for_frames().get_color_frame().get_data())
+
+        if self.mode == "realtime":
+            print("Start with realtime mode.")
+            pipeline = rs.pipeline()
+            config = rs.config()
+            config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+            pipeline.start(config)
+            frames = pipeline.wait_for_frames()
+            color_frame = frames.get_color_frame()
+            color_image = np.asanyarray(color_frame.get_data())
+            get_frame = lambda: np.asanyarray(pipeline.wait_for_frames().get_color_frame().get_data())
+        elif self.mode == "video":
+            print("Start with video mode.")
+            cap = cv2.VideoCapture(self.video_path)
+            ret, color_image = cap.read()
+            get_frame = lambda: cap.read()
+        else:
+            raise ValueError("The mode is not supported in this method.")
+
         self.height, self.width = color_image.shape[:2]
 
         if self.save_video:
@@ -294,30 +239,48 @@ class Lang2SegTrack:
 
         cv2.namedWindow("Video Tracking")
 
+        threading.Thread(target=self.input_thread, daemon=True).start()
+
         with torch.inference_mode(), torch.autocast("cuda", dtype=torch.float16):
-            state = predictor.init_state_from_numpy_frames([color_image], offload_state_to_cpu=False)
-            if len(self.start) != 0:
-                self.add_to_state(predictor, state, self.start)
-                self.start.clear()
+            state = predictor.init_state_from_numpy_frames([color_image], offload_state_to_cpu=False, offload_video_to_cpu=False)
             while True:
-                ret = pipeline.wait_for_frames().get_color_frame()
-                frame = np.asanyarray(ret.get_data())
-                if not ret:
-                    continue
+                if self.mode == "realtime":
+                    frame = get_frame()
+                else:
+                    ret, frame = get_frame()
+                    if not ret:
+                        continue
                 self.frame_display = frame.copy()
+                cv2.setMouseCallback("Video Tracking", self.draw_bbox, param=self.frame_display)
+
+                if not self.input_queue.empty():
+                    text = self.input_queue.get()
+                    out = self.gdino.predict([Image.fromarray(frame)], [text], 0.3, 0.25)
+                    boxes = [[int(v) for v in box] for box in out[0]["boxes"].cpu().numpy().tolist()]
+                    self.prompts_list.extend(boxes)
+                    self.add_new = True
+
+                if self.add_new:
+                    predictor.reset_state(state)
+                    self.add_to_state(predictor, state, self.prompts_list)
+                    self.add_new = False
 
                 predictor.append_frame_to_inference_state(state, frame)
                 self.track_and_visualize(predictor, state, frame, writer)
                 if (state["num_frames"] - 1) % self.max_frames and len(state["output_dict"]["non_cond_frame_outputs"]) != 0:
                     predictor.append_frame_as_cond_frame(state, state["num_frames"] - 1)
                 predictor.release_old_frames(state, state["num_frames"] - 1, self.max_frames, 0, release_images=True)
+
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
 
-        pipeline.stop()
-        cv2.destroyAllWindows()
+        if self.mode == "realtime":
+            pipeline.stop()
+        else:
+            cap.release()
         if writer:
             writer.close()
+        cv2.destroyAllWindows()
         del predictor, state
         gc.collect()
         torch.clear_autocast_cache()
@@ -332,7 +295,7 @@ if __name__ == "__main__":
                             output_path="processed_video.mp4",
                             mode="video",
                             save_video=True,
-                            gdino_16=False)
+                            gdino_16=True)
     tracker.track()
 
     # out = tracker.predict_img(
