@@ -25,7 +25,7 @@ class Lang2SegTrack:
     def __init__(self, sam_type:str="sam2.1_hiera_tiny", model_path:str="models/sam2/checkpoints/sam2.1_hiera_tiny.pt",
                  video_path:str="", output_path:str="", max_frames:int=20,
                  first_prompts: list[list] | None = None, save_video=True,
-                 gdino_16=False, device="cuda:0", mode="realtime"):
+                 gdino_16=False, device="cuda:0", mode="video"):
         self.sam_type = sam_type # the type of SAM model to use
         self.model_path = model_path # the path to the SAM model checkpoint
         self.video_path = video_path # the path to the video to track. If mode="video", this param is required.
@@ -41,6 +41,7 @@ class Lang2SegTrack:
         self.sam = SAM()
         self.sam.build_model(self.sam_type, self.model_path, predictor_type=mode, device=device)
         self.gdino = GDINO()
+        self.gdino.build_model()
         self.gdino_16 = gdino_16
         if not gdino_16:
             print("Building GroundingDINO model...")
@@ -115,7 +116,6 @@ class Lang2SegTrack:
                     self.draw_mask_and_bbox(frame, mask, bbox, obj_id)
                     self.prompts_list.append([bbox[0], bbox[1], bbox[0] + bbox[2], bbox[1] + bbox[3]])
         self.show_fps(frame)
-        cv2.imshow("Video Tracking", frame)
 
         if writer:
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -209,7 +209,6 @@ class Lang2SegTrack:
         return all_results
 
     def track(self):
-
         predictor = self.sam.video_predictor
 
         if self.mode == "realtime":
@@ -237,26 +236,31 @@ class Lang2SegTrack:
         else:
             writer = None
 
-        cv2.namedWindow("Video Tracking")
-
         threading.Thread(target=self.input_thread, daemon=True).start()
 
         with torch.inference_mode(), torch.autocast("cuda", dtype=torch.float16):
-            state = predictor.init_state_from_numpy_frames([color_image], offload_state_to_cpu=False, offload_video_to_cpu=False)
+            state = predictor.init_state_from_numpy_frames(
+                [color_image],
+                offload_state_to_cpu=False,
+                offload_video_to_cpu=False,
+            )
+
             while True:
                 if self.mode == "realtime":
                     frame = get_frame()
                 else:
                     ret, frame = get_frame()
                     if not ret:
-                        continue
+                        break
+
                 self.frame_display = frame.copy()
-                cv2.setMouseCallback("Video Tracking", self.draw_bbox, param=self.frame_display)
 
                 if not self.input_queue.empty():
                     text = self.input_queue.get()
+                    print(f"[Prompt Received]: {text}")
                     out = self.gdino.predict([Image.fromarray(frame)], [text], 0.3, 0.25)
                     boxes = [[int(v) for v in box] for box in out[0]["boxes"].cpu().numpy().tolist()]
+                    print(f"[Detected Boxes]: {boxes}")
                     self.prompts_list.extend(boxes)
                     self.add_new = True
 
@@ -266,13 +270,32 @@ class Lang2SegTrack:
                     self.add_new = False
 
                 predictor.append_frame_to_inference_state(state, frame)
-                self.track_and_visualize(predictor, state, frame, writer)
+
+                if any(len(state["point_inputs_per_obj"][i]) > 0 for i in range(len(state["point_inputs_per_obj"]))):
+                    for frame_idx, obj_ids, masks in predictor.propagate_in_frame(state, state["num_frames"] - 1):
+                        self.prompts_list = []
+                        for obj_id, mask in zip(obj_ids, masks):
+                            mask = mask[0].cpu().numpy() > 0.0
+                            nonzero = np.argwhere(mask)
+                            if nonzero.size == 0:
+                                bbox = [0, 0, 0, 0]
+                            else:
+                                y_min, x_min = nonzero.min(axis=0)
+                                y_max, x_max = nonzero.max(axis=0)
+                                bbox = [x_min, y_min, x_max - x_min, y_max - y_min]
+                            self.draw_mask_and_bbox(frame, mask, bbox, obj_id)
+                            self.prompts_list.append([bbox[0], bbox[1], bbox[0] + bbox[2], bbox[1] + bbox[3]])
+
+                self.show_fps(frame)
+
+                if writer:
+                    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    writer.append_data(rgb)
+
                 if (state["num_frames"] - 1) % self.max_frames and len(state["output_dict"]["non_cond_frame_outputs"]) != 0:
                     predictor.append_frame_as_cond_frame(state, state["num_frames"] - 1)
-                predictor.release_old_frames(state, state["num_frames"] - 1, self.max_frames, 0, release_images=True)
 
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    break
+                predictor.release_old_frames(state, state["num_frames"] - 1, self.max_frames, 0, release_images=True)
 
         if self.mode == "realtime":
             pipeline.stop()
@@ -280,7 +303,7 @@ class Lang2SegTrack:
             cap.release()
         if writer:
             writer.close()
-        cv2.destroyAllWindows()
+
         del predictor, state
         gc.collect()
         torch.clear_autocast_cache()
